@@ -290,8 +290,8 @@ class GatewayServer {
               <div class="generator-section">
                 <div class="section-label">Quick Generator</div>
                 <div class="btn-group">
-                  <button class="btn-vless" onclick="generateConfig('vless')">Generate VLESS</button>
-                  <button class="btn-trojan" onclick="generateConfig('trojan')">Generate TROJAN</button>
+                  <button class="btn-vless" onclick="generateConfig('vless')">VLESS</button>
+                  <button class="btn-trojan" onclick="generateConfig('trojan')">TROJAN</button>
                 </div>
                 <div class="output-wrapper">
                   <input type="text" id="config-output" readonly placeholder="Select a protocol to generate..." />
