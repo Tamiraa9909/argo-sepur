@@ -17,7 +17,7 @@ class GatewayServer {
     this.activeUDPConnections = new Map();
   }
 
-// ==================== HTTP HANDLERS ====================
+  // ==================== HTTP HANDLERS & DASHBOARD ====================
 
   async handleHttpRequest(req, res) {
     const parsedUrl = url.parse(req.url, true);
@@ -52,8 +52,10 @@ class GatewayServer {
               letter-spacing: 4px;
               margin-bottom: 30px;
             }
+            /* Konfigurasi Warna Merek MEDIAFAIRY */
             .brand-media { color: #FFFFFF; }
             .brand-fairy { color: #0088FF; }
+            
             .status-container {
               background: #0A0A0A;
               border: 1px solid #222;
@@ -120,7 +122,6 @@ class GatewayServer {
           </div>
 
           <script>
-            // Mengambil detik uptime asli dari server Node.js saat halaman dimuat
             let totalSeconds = ${serverUptime};
             const display = document.getElementById('uptime-display');
             
@@ -140,7 +141,6 @@ class GatewayServer {
               display.innerText = timeString;
             }
 
-            // Jalankan sekali lalu set interval tiap detik
             updateUptime();
             setInterval(updateUptime, 1000);
           </script>
@@ -152,7 +152,6 @@ class GatewayServer {
     
     res.writeHead(404, { 'Content-Type': 'text/plain' });
     res.end('Not Found');
-  }
   }
 
   // ==================== WEBSOCKET HANDLERS ====================
