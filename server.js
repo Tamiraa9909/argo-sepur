@@ -15,6 +15,12 @@ class GatewayServer {
     this.wss = null;
     this.httpServer = null;
     this.activeUDPConnections = new Map();
+    
+    // In-Memory Bandwidth Tracker
+    this.stats = {
+      rx: 0, // Received from VPN Client (Upload)
+      tx: 0  // Sent to VPN Client (Download)
+    };
   }
 
   // ==================== HTTP HANDLERS & DASHBOARD ====================
@@ -22,10 +28,19 @@ class GatewayServer {
   async handleHttpRequest(req, res) {
     const parsedUrl = url.parse(req.url, true);
     
-    // Response for dashboard/root
+    // API Endpoint untuk pembaruan data real-time pada UI
+    if (parsedUrl.pathname === '/api/stats') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        uptime: Math.floor(process.uptime()),
+        rx: this.stats.rx,
+        tx: this.stats.tx
+      }));
+      return;
+    }
+
+    // Response untuk dashboard utama (Root Path)
     if (parsedUrl.pathname === '/') {
-      const serverUptime = Math.floor(process.uptime());
-      
       res.writeHead(200, { 'Content-Type': 'text/html' });
       res.end(`
         <!DOCTYPE html>
@@ -33,100 +48,222 @@ class GatewayServer {
         <head>
           <meta charset="UTF-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>STATUS // MEDIAFAIRY</title>
+          <title>GATEWAY CORE // SYSTEM STATUS</title>
           <style>
-            body {
+            :root {
+              --bg-black: #000000;
+              --panel-bg: #0a0a0a;
+              --card-bg: #000000;
+              --border-color: #1f1f1f;
+              --border-hover: #333333;
+              --text-main: #ffffff;
+              --text-muted: #888888;
+              --accent-blue: #0070f3;
+              --status-green: #00df89;
+            }
+
+            * {
+              box-sizing: border-box;
               margin: 0;
-              background-color: #050505;
-              font-family: 'Courier New', Courier, monospace;
+              padding: 0;
+            }
+
+            body {
+              background-color: var(--bg-black);
+              color: var(--text-main);
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Geist Sans", "Inter", sans-serif;
+              min-height: 100vh;
               display: flex;
               flex-direction: column;
               justify-content: center;
               align-items: center;
-              height: 100vh;
-              user-select: none;
+              padding: 24px;
+              -webkit-font-smoothing: antialiased;
+              -moz-osx-font-smoothing: grayscale;
             }
-            .header-brand {
-              font-size: 1.5rem;
-              font-weight: 900;
-              letter-spacing: 4px;
-              margin-bottom: 30px;
+
+            /* macOS Window Container dengan Vercel High Contrast Minimalist */
+            .window-container {
+              width: 100%;
+              max-width: 640px;
+              background-color: var(--panel-bg);
+              border: 1px solid var(--border-color);
+              border-radius: 12px;
+              box-shadow: 0 30px 60px rgba(0, 0, 0, 0.8);
+              overflow: hidden;
             }
-            /* Konfigurasi Warna Merek MEDIAFAIRY */
-            .brand-media { color: #FFFFFF; }
-            .brand-fairy { color: #0088FF; }
-            
-            .status-container {
-              background: #0A0A0A;
-              border: 1px solid #222;
-              border-radius: 16px;
-              padding: 40px 60px;
-              text-align: center;
-              box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-            }
-            .status-badge {
-              display: inline-flex;
+
+            /* macOS Window Top Bar */
+            .window-header {
+              background-color: #050505;
+              border-bottom: 1px solid var(--border-color);
+              padding: 14px 20px;
+              display: flex;
               align-items: center;
-              gap: 12px;
-              background: rgba(0, 255, 136, 0.1);
-              border: 1px solid rgba(0, 255, 136, 0.2);
-              color: #00FF88;
-              padding: 8px 16px;
-              border-radius: 50px;
-              font-size: 0.9rem;
-              font-weight: bold;
-              letter-spacing: 1px;
-              margin-bottom: 25px;
+              justify-content: space-between;
             }
+
+            .mac-dots {
+              display: flex;
+              gap: 8px;
+            }
+
             .dot {
-              width: 10px;
-              height: 10px;
-              background-color: #00FF88;
+              width: 12px;
+              height: 12px;
               border-radius: 50%;
-              box-shadow: 0 0 10px #00FF88;
-              animation: pulse 2s infinite;
+              opacity: 0.75;
             }
-            .uptime-label {
-              color: #666;
+            .dot.close { background-color: #ff5f56; }
+            .dot.minimize { background-color: #ffbd2e; }
+            .dot.zoom { background-color: #27c93f; }
+
+            /* Brand Typography (MEDIA berwarna putih, FAIRY berwarna biru) */
+            .brand-title {
               font-size: 0.8rem;
-              letter-spacing: 2px;
-              margin-bottom: 5px;
+              font-weight: 700;
+              letter-spacing: 3px;
               text-transform: uppercase;
             }
-            .uptime-value {
-              color: #EDEDED;
-              font-size: 3rem;
-              font-weight: bold;
-              letter-spacing: 2px;
+            .brand-media { color: #ffffff; }
+            .brand-fairy { color: var(--accent-blue); }
+
+            .status-badge {
+              display: flex;
+              align-items: center;
+              gap: 6px;
+              font-size: 0.75rem;
+              font-weight: 600;
+              color: var(--status-green);
+              letter-spacing: 0.5px;
             }
-            @keyframes pulse {
-              0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 255, 136, 0.7); }
-              70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(0, 255, 136, 0); }
-              100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 255, 136, 0); }
+
+            .pulse-dot {
+              width: 6px;
+              height: 6px;
+              background-color: var(--status-green);
+              border-radius: 50%;
+              box-shadow: 0 0 8px var(--status-green);
+              animation: ambientPulse 2.5s infinite ease-in-out;
+            }
+
+            /* Content Layout */
+            .window-content {
+              padding: 32px;
+            }
+
+            /* Uptime Main Dashboard Section */
+            .uptime-section {
+              text-align: center;
+              padding-bottom: 32px;
+              border-bottom: 1px solid var(--border-color);
+              margin-bottom: 32px;
+            }
+
+            .section-label {
+              font-size: 0.7rem;
+              text-transform: uppercase;
+              color: var(--text-muted);
+              letter-spacing: 2px;
+              margin-bottom: 8px;
+            }
+
+            .uptime-display {
+              font-size: 3rem;
+              font-weight: 800;
+              letter-spacing: -1px;
+              color: var(--text-main);
+              font-variant-numeric: tabular-nums;
+            }
+
+            /* Bandwidth Info Metrics Grid */
+            .stats-grid {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 20px;
+            }
+
+            .card {
+              background-color: var(--card-bg);
+              border: 1px solid var(--border-color);
+              border-radius: 8px;
+              padding: 20px;
+              transition: border-color 0.2s ease, box-shadow 0.2s ease;
+            }
+
+            .card:hover {
+              border-color: var(--border-hover);
+            }
+
+            .card-value {
+              font-size: 1.5rem;
+              font-weight: 700;
+              margin-top: 4px;
+              color: var(--text-main);
+              font-variant-numeric: tabular-nums;
+            }
+
+            /* Device Layout Compatibility Adjustments */
+            @media (max-width: 540px) {
+              body { padding: 16px; }
+              .window-content { padding: 24px; }
+              .stats-grid { grid-template-columns: 1fr; gap: 16px; }
+              .uptime-display { font-size: 2.25rem; }
+            }
+
+            @keyframes ambientPulse {
+              0%, 100% { opacity: 0.4; }
+              50% { opacity: 1; }
             }
           </style>
         </head>
         <body>
-          <div class="header-brand">
-            <span class="brand-media">MEDIA</span><span class="brand-fairy">FAIRY</span>
-          </div>
-          
-          <div class="status-container">
-            <div class="status-badge">
-              <div class="dot"></div>
-              SERVER RUNNING
+
+          <div class="window-container">
+            <div class="window-header">
+              <div class="mac-dots">
+                <div class="dot close"></div>
+                <div class="dot minimize"></div>
+                <div class="dot zoom"></div>
+              </div>
+              <div class="brand-title">
+                <span class="brand-media">MEDIA</span><span class="brand-fairy">FAIRY</span>
+              </div>
+              <div class="status-badge">
+                <div class="pulse-dot"></div>
+                RUNNING
+              </div>
             </div>
-            
-            <div class="uptime-label">System Uptime</div>
-            <div class="uptime-value" id="uptime-display">00:00:00</div>
+
+            <div class="window-content">
+              <div class="uptime-section">
+                <div class="section-label">System Uptime</div>
+                <div class="uptime-display" id="uptime-field">00:00:00</div>
+              </div>
+
+              <div class="stats-grid">
+                <div class="card">
+                  <div class="section-label">Download (TX)</div>
+                  <div class="card-value" id="download-field">0 B</div>
+                </div>
+                <div class="card">
+                  <div class="section-label">Upload (RX)</div>
+                  <div class="card-value" id="upload-field">0 B</div>
+                </div>
+              </div>
+            </div>
           </div>
 
           <script>
-            let totalSeconds = ${serverUptime};
-            const display = document.getElementById('uptime-display');
-            
-            function updateUptime() {
-              totalSeconds++;
+            function formatBytes(bytes) {
+              if (bytes === 0) return '0 B';
+              const k = 1024;
+              const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+              const i = Math.floor(Math.log(bytes) / Math.log(k));
+              return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+            }
+
+            function formatTime(totalSeconds) {
               const days = Math.floor(totalSeconds / 86400);
               const hours = Math.floor((totalSeconds % 86400) / 3600);
               const minutes = Math.floor((totalSeconds % 3600) / 60);
@@ -137,12 +274,25 @@ class GatewayServer {
               timeString += String(hours).padStart(2, '0') + ':';
               timeString += String(minutes).padStart(2, '0') + ':';
               timeString += String(seconds).padStart(2, '0');
-              
-              display.innerText = timeString;
+              return timeString;
             }
 
-            updateUptime();
-            setInterval(updateUptime, 1000);
+            async function refreshDashboardStats() {
+              try {
+                const response = await fetch('/api/stats');
+                const statsData = await response.json();
+                
+                document.getElementById('uptime-field').innerText = formatTime(statsData.uptime);
+                document.getElementById('download-field').innerText = formatBytes(statsData.tx);
+                document.getElementById('upload-field').innerText = formatBytes(statsData.rx);
+              } catch (error) {
+                console.error("Gagal memperbarui matriks dasbor jaringan.");
+              }
+            }
+
+            // Jalankan siklus penarikan data secara berkala tiap 1 detik
+            refreshDashboardStats();
+            setInterval(refreshDashboardStats, 1000);
           </script>
         </body>
         </html>
@@ -178,6 +328,9 @@ class GatewayServer {
     ws.on('message', async (message) => {
       try {
         const chunk = Buffer.from(message);
+        
+        // Catat trafik Upload (Client -> Server)
+        this.stats.rx += chunk.length;
 
         if (remoteSocketWrapper.value) {
           remoteSocketWrapper.value.write(chunk);
@@ -291,6 +444,9 @@ class GatewayServer {
         });
         
         udpSocket.on('message', (message) => {
+          // Catat trafik UDP Download (Internet -> Server -> Client)
+          this.stats.tx += message.length;
+          
           if (webSocket.readyState === WebSocket.OPEN) {
             if (protocolHeader) {
               const combined = Buffer.concat([Buffer.from(protocolHeader), message]);
@@ -441,6 +597,9 @@ class GatewayServer {
     let header = responseHeader;
 
     remoteSocket.on('data', (chunk) => {
+      // Catat trafik TCP Download (Internet -> Server -> Client)
+      this.stats.tx += chunk.length;
+      
       if (webSocket.readyState !== WS_READY_STATE_OPEN) {
         remoteSocket.destroy();
         return;
