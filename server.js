@@ -28,7 +28,6 @@ class GatewayServer {
   async handleHttpRequest(req, res) {
     const parsedUrl = url.parse(req.url, true);
     
-    // API Endpoint untuk pembaruan data real-time pada UI
     if (parsedUrl.pathname === '/api/stats') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({
@@ -39,7 +38,6 @@ class GatewayServer {
       return;
     }
 
-    // Response untuk dashboard utama (Root Path)
     if (parsedUrl.pathname === '/') {
       res.writeHead(200, { 'Content-Type': 'text/html' });
       res.end(`
@@ -75,14 +73,16 @@ class GatewayServer {
               min-height: 100vh;
               display: flex;
               flex-direction: column;
-              justify-content: center;
+              
+              /* PERUBAHAN POSISI: Diatur agar ditarik ke atas */
+              justify-content: flex-start;
               align-items: center;
-              padding: 24px;
+              padding: 10vh 24px 24px 24px; 
+              
               -webkit-font-smoothing: antialiased;
               -moz-osx-font-smoothing: grayscale;
             }
 
-            /* macOS Window Container dengan Vercel High Contrast Minimalist */
             .window-container {
               width: 100%;
               max-width: 640px;
@@ -93,7 +93,6 @@ class GatewayServer {
               overflow: hidden;
             }
 
-            /* macOS Window Top Bar */
             .window-header {
               background-color: #050505;
               border-bottom: 1px solid var(--border-color);
@@ -118,7 +117,6 @@ class GatewayServer {
             .dot.minimize { background-color: #ffbd2e; }
             .dot.zoom { background-color: #27c93f; }
 
-            /* Brand Typography (MEDIA berwarna putih, FAIRY berwarna biru) */
             .brand-title {
               font-size: 0.8rem;
               font-weight: 700;
@@ -147,12 +145,10 @@ class GatewayServer {
               animation: ambientPulse 2.5s infinite ease-in-out;
             }
 
-            /* Content Layout */
             .window-content {
               padding: 32px;
             }
 
-            /* Uptime Main Dashboard Section */
             .uptime-section {
               text-align: center;
               padding-bottom: 32px;
@@ -176,7 +172,6 @@ class GatewayServer {
               font-variant-numeric: tabular-nums;
             }
 
-            /* Bandwidth Info Metrics Grid */
             .stats-grid {
               display: grid;
               grid-template-columns: 1fr 1fr;
@@ -203,9 +198,8 @@ class GatewayServer {
               font-variant-numeric: tabular-nums;
             }
 
-            /* Device Layout Compatibility Adjustments */
             @media (max-width: 540px) {
-              body { padding: 16px; }
+              body { padding: 6vh 16px 16px 16px; }
               .window-content { padding: 24px; }
               .stats-grid { grid-template-columns: 1fr; gap: 16px; }
               .uptime-display { font-size: 2.25rem; }
@@ -286,11 +280,10 @@ class GatewayServer {
                 document.getElementById('download-field').innerText = formatBytes(statsData.tx);
                 document.getElementById('upload-field').innerText = formatBytes(statsData.rx);
               } catch (error) {
-                console.error("Gagal memperbarui matriks dasbor jaringan.");
+                // Senyap jika gagal, mencegah spam console
               }
             }
 
-            // Jalankan siklus penarikan data secara berkala tiap 1 detik
             refreshDashboardStats();
             setInterval(refreshDashboardStats, 1000);
           </script>
@@ -329,7 +322,6 @@ class GatewayServer {
       try {
         const chunk = Buffer.from(message);
         
-        // Catat trafik Upload (Client -> Server)
         this.stats.rx += chunk.length;
 
         if (remoteSocketWrapper.value) {
@@ -444,7 +436,6 @@ class GatewayServer {
         });
         
         udpSocket.on('message', (message) => {
-          // Catat trafik UDP Download (Internet -> Server -> Client)
           this.stats.tx += message.length;
           
           if (webSocket.readyState === WebSocket.OPEN) {
@@ -597,7 +588,6 @@ class GatewayServer {
     let header = responseHeader;
 
     remoteSocket.on('data', (chunk) => {
-      // Catat trafik TCP Download (Internet -> Server -> Client)
       this.stats.tx += chunk.length;
       
       if (webSocket.readyState !== WS_READY_STATE_OPEN) {
