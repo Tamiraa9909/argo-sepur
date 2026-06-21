@@ -17,25 +17,134 @@ class GatewayServer {
     this.activeUDPConnections = new Map();
   }
 
-  // ==================== HTTP HANDLERS ====================
+// ==================== HTTP HANDLERS ====================
 
   async handleHttpRequest(req, res) {
     const parsedUrl = url.parse(req.url, true);
     
-    // Simple response for dashboard/root
+    // Response for dashboard/root
     if (parsedUrl.pathname === '/') {
+      const serverUptime = Math.floor(process.uptime());
+      
       res.writeHead(200, { 'Content-Type': 'text/html' });
       res.end(`
         <!DOCTYPE html>
-        <html>
+        <html lang="en">
         <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>STATUS // MEDIAFAIRY</title>
           <style>
-            body { background: #050505; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; font-family: monospace; }
-            .welcome { font-size: 3rem; font-weight: bold; background: linear-gradient(90deg, #00FFFF, #FFFFFF); -webkit-background-clip: text; -webkit-text-fill-color: transparent; animation: scrollText 3s linear infinite; }
-            @keyframes scrollText { 0% { background-position: 0% 50%; } 100% { background-position: 100% 50%; } }
+            body {
+              margin: 0;
+              background-color: #050505;
+              font-family: 'Courier New', Courier, monospace;
+              display: flex;
+              flex-direction: column;
+              justify-content: center;
+              align-items: center;
+              height: 100vh;
+              user-select: none;
+            }
+            .header-brand {
+              font-size: 1.5rem;
+              font-weight: 900;
+              letter-spacing: 4px;
+              margin-bottom: 30px;
+            }
+            .brand-media { color: #FFFFFF; }
+            .brand-fairy { color: #0088FF; }
+            .status-container {
+              background: #0A0A0A;
+              border: 1px solid #222;
+              border-radius: 16px;
+              padding: 40px 60px;
+              text-align: center;
+              box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            }
+            .status-badge {
+              display: inline-flex;
+              align-items: center;
+              gap: 12px;
+              background: rgba(0, 255, 136, 0.1);
+              border: 1px solid rgba(0, 255, 136, 0.2);
+              color: #00FF88;
+              padding: 8px 16px;
+              border-radius: 50px;
+              font-size: 0.9rem;
+              font-weight: bold;
+              letter-spacing: 1px;
+              margin-bottom: 25px;
+            }
+            .dot {
+              width: 10px;
+              height: 10px;
+              background-color: #00FF88;
+              border-radius: 50%;
+              box-shadow: 0 0 10px #00FF88;
+              animation: pulse 2s infinite;
+            }
+            .uptime-label {
+              color: #666;
+              font-size: 0.8rem;
+              letter-spacing: 2px;
+              margin-bottom: 5px;
+              text-transform: uppercase;
+            }
+            .uptime-value {
+              color: #EDEDED;
+              font-size: 3rem;
+              font-weight: bold;
+              letter-spacing: 2px;
+            }
+            @keyframes pulse {
+              0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 255, 136, 0.7); }
+              70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(0, 255, 136, 0); }
+              100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 255, 136, 0); }
+            }
           </style>
         </head>
-        <body><div class="welcome">WELCOME</div></body>
+        <body>
+          <div class="header-brand">
+            <span class="brand-media">MEDIA</span><span class="brand-fairy">FAIRY</span>
+          </div>
+          
+          <div class="status-container">
+            <div class="status-badge">
+              <div class="dot"></div>
+              SERVER RUNNING
+            </div>
+            
+            <div class="uptime-label">System Uptime</div>
+            <div class="uptime-value" id="uptime-display">00:00:00</div>
+          </div>
+
+          <script>
+            // Mengambil detik uptime asli dari server Node.js saat halaman dimuat
+            let totalSeconds = ${serverUptime};
+            const display = document.getElementById('uptime-display');
+            
+            function updateUptime() {
+              totalSeconds++;
+              const days = Math.floor(totalSeconds / 86400);
+              const hours = Math.floor((totalSeconds % 86400) / 3600);
+              const minutes = Math.floor((totalSeconds % 3600) / 60);
+              const seconds = totalSeconds % 60;
+              
+              let timeString = '';
+              if (days > 0) timeString += days + 'd ';
+              timeString += String(hours).padStart(2, '0') + ':';
+              timeString += String(minutes).padStart(2, '0') + ':';
+              timeString += String(seconds).padStart(2, '0');
+              
+              display.innerText = timeString;
+            }
+
+            // Jalankan sekali lalu set interval tiap detik
+            updateUptime();
+            setInterval(updateUptime, 1000);
+          </script>
+        </body>
         </html>
       `);
       return;
@@ -43,6 +152,7 @@ class GatewayServer {
     
     res.writeHead(404, { 'Content-Type': 'text/plain' });
     res.end('Not Found');
+  }
   }
 
   // ==================== WEBSOCKET HANDLERS ====================
